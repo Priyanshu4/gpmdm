@@ -53,7 +53,7 @@ class Viewer:
     # of the window
     # if you can't see anything in the screen, this is the first parameter you
     # need to adjust
-    self.default_translate = np.array([0, -20, -100], dtype=np.float32)
+    self.default_translate = np.array([0, -2, -10], dtype=np.float32)
     self.translate = np.copy(self.default_translate)
 
     pygame.init()

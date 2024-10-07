@@ -1,5 +1,5 @@
 """ Adapted from https://github.com/CalciferZh/AMCParser/blob/master/amc_parser.py
-    Parses .asf and .amc files 
+    Parses .asf and .amc files from cmu mocap dataset
 """
 
 import numpy as np
@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from transforms3d.euler import euler2mat
 from mpl_toolkits.mplot3d import Axes3D
 
+CMU_MOCAP_LENGTH_TO_METERS = (1/0.45) * 2.54/100 
 
 class Joint:
   def __init__(self, name, direction, length, axis, dof, limits):
@@ -37,6 +38,7 @@ class Joint:
     self.name = name
     self.direction = np.reshape(direction, [3, 1])
     self.length = length
+    self.dof = dof
     axis = np.deg2rad(axis)
     self.C = euler2mat(*axis)
     self.Cinv = np.linalg.inv(self.C)
@@ -72,14 +74,17 @@ class Joint:
       child.set_motion(motion)
 
   def draw(self):
+    if self.coordinate is None:
+      raise ValueError('motion is not set')
+
     joints = self.to_dict()
     fig = plt.figure()
     ax = Axes3D(fig,auto_add_to_figure=False)
     fig.add_axes(ax)
 
-    ax.set_xlim3d(-50, 10)
-    ax.set_ylim3d(-20, 40)
-    ax.set_zlim3d(-20, 40)
+    ax.set_xlim3d(-50 * CMU_MOCAP_LENGTH_TO_METERS, 10 * CMU_MOCAP_LENGTH_TO_METERS)
+    ax.set_ylim3d(-20 * CMU_MOCAP_LENGTH_TO_METERS, 40 * CMU_MOCAP_LENGTH_TO_METERS)
+    ax.set_zlim3d(-20 * CMU_MOCAP_LENGTH_TO_METERS, 40 * CMU_MOCAP_LENGTH_TO_METERS)
 
     xs, ys, zs = [], [], []
     for joint in joints.values():
@@ -134,7 +139,7 @@ def parse_asf(file_path):
       break
 
   # read joints
-  joints = {'root': Joint('root', np.zeros(3), 0, np.zeros(3), [], [])}
+  joints = {'root': Joint('root', np.zeros(3), 0, np.zeros(3), ["tx", "ty", "tz", "rx", "ry", "rz"], [])}
   idx = 0
   while True:
     # the order of each section is hard-coded
@@ -160,7 +165,7 @@ def parse_asf(file_path):
     # skip length
     line, idx = read_line(content, idx)
     assert line[0] == 'length'
-    length = float(line[1])
+    length = float(line[1]) * CMU_MOCAP_LENGTH_TO_METERS
 
     line, idx = read_line(content, idx)
     assert line[0] == 'axis'
@@ -239,7 +244,13 @@ def parse_amc(file_path):
         break
       if line[0].isnumeric():
         break
-      joint_degree[line[0]] = [float(deg) for deg in line[1:]]
+      if line[0] == 'root':
+        root_translation = [float(t) * CMU_MOCAP_LENGTH_TO_METERS for t in line[1:4]]
+        root_rotation = [float(deg) for deg in line[4:]]
+        joint_degree['root'] = root_translation + root_rotation
+      else:
+        joint_degree[line[0]] = [float(deg) for deg in line[1:]]
+
     frames.append(joint_degree)
   return frames
 
