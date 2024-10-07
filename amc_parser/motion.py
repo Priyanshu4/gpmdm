@@ -23,7 +23,7 @@ class MotionCapture:
         for joint_name, joint in self.joints.items():
             
             # Add columns for each joint
-            joint_columns = [f'{joint_name}_{dof}' for dof in joint.dof]
+            joint_columns = self.get_columns_for_joint(joint_name)
             for column in joint_columns:
                 df[column] = None
 
@@ -33,11 +33,18 @@ class MotionCapture:
 
                 assert len(joint.dof) == len(rotation)
 
-                for dof, rotation_value in zip(joint.dof, rotation):
-                    column = f'{joint_name}_{dof}'
+                columns = self.get_columns_for_joint(joint_name)
+                for column, rotation_value in zip(columns, rotation):
                     df.at[i, column] = rotation_value
 
         return df
+    
+    def get_columns_for_joint(self, joint_name):
+        """
+        Return column names for a joint.
+        """
+        joint = self.joints[joint_name]
+        return [f'{joint_name}_{dof}' for dof in joint.dof]
 
     @property
     def joints(self):
