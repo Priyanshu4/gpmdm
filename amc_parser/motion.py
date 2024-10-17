@@ -45,6 +45,15 @@ class MotionCapture:
         """
         joint = self.joints[joint_name]
         return [f'{joint_name}_{dof}' for dof in joint.dof]
+    
+    def get_columns_for_joints(self, joint_names):
+        """
+        Return column names for a list of joints.
+        """
+        columns = []
+        for joint_name in joint_names:
+            columns.extend(self.get_columns_for_joint(joint_name))
+        return columns
 
     @property
     def joints(self):
@@ -53,6 +62,12 @@ class MotionCapture:
     @property
     def fps(self):
         return self._fps
+    
+    @property
+    def n_frames(self):
+        return len(self._frames)
+
+
     
     def view(self):
         viewer = Viewer()
