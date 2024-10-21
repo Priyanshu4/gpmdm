@@ -37,7 +37,7 @@ def __get_mocaps(trials: dict) -> list:
         for trial in trials:
             asf_path = __get_path_asf(subject)
             amc_path = __get_path_amc(subject, trial)
-            mocaps.append(MotionCapture(asf_path=asf_path, amc_path=amc_path))
+            mocaps.append(MotionCapture(asf_path=asf_path, amc_path=amc_path, fps=120, subject=subject, trial=trial))
 
     return mocaps
 

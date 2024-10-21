@@ -2,13 +2,18 @@ from amc_parser import parse_asf, parse_amc
 from .viewer import Viewer
 import pandas as pd
 
+from typing import Optional
 
 class MotionCapture:
 
-    def __init__(self, asf_path, amc_path, fps=120):
+    def __init__(self, asf_path, amc_path, fps=120, subject: Optional[int] = None, trial: Optional[int] = None):
+        """
+        """
         self._joints = parse_asf(asf_path)
         self._frames = parse_amc(amc_path)
         self._fps = fps
+        self.subject = subject
+        self.trial = trial
 
     def as_dataframe(self):
         """
