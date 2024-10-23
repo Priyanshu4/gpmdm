@@ -30,7 +30,7 @@ def __get_path_asf(subject):
     return Path(__file__).parent / 'mocap' / 'subjects' / subject / f'{subject}.asf'
 
 
-def __get_mocaps(trials: dict) -> list:
+def __get_mocaps(trials: dict) -> list[MotionCapture]:
     mocaps = []
     for subject, trials in trials.items():
 

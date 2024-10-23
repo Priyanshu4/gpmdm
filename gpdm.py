@@ -12,6 +12,7 @@ from sklearn.decomposition import PCA
 from torch.distributions.normal import Normal
 import pickle
 from termcolor import colored, cprint
+from pathlib import Path
 
 
 class GPDM(torch.nn.Module):
@@ -1172,15 +1173,21 @@ class GPDM(torch.nn.Module):
         Parameters
         ----------
 
-        config_dict : dict
+        config_dict : pathlike or dict
             configuration dictionary
 
-        config_dict : collections.OrderedDict
+        config_dict : pathlike or collections.OrderedDict
             model state dictionary
 
         flg_print : bool (optional)
             flag to print loaded state_dict (default is False)
         """
+
+        if isinstance(config_dict, (str, Path)):
+            config_dict = pickle.load(open(config_dict, 'rb'))
+
+        if isinstance(state_dict, (str, Path)):
+            state_dict = torch.load(state_dict)
 
         self.observations_list = config_dict['observations_list']
         self.init_X()

@@ -1,6 +1,7 @@
 from amc_parser import parse_asf, parse_amc
 from .viewer import Viewer
 import pandas as pd
+import numpy as np
 
 from typing import Optional
 
@@ -43,6 +44,12 @@ class MotionCapture:
                     df.at[i, column] = rotation_value
 
         return df
+    
+    def as_numpy(self):
+        """
+        Return motion sequence as numpy array.
+        """
+        return self.as_dataframe().drop(['time', 'frame']).to_numpy().astype(np.float32)
     
     def get_columns_for_joint(self, joint_name):
         """
