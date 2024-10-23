@@ -46,3 +46,16 @@ DIGIT_JOINTS = [
 ]
 
 REDUCED_JOINTS = [joint for joint in ALL_JOINTS if joint not in DIGIT_JOINTS]
+
+__non_walking_simplified_joints = [
+    "root",
+    "lowerneck",
+    "upperneck",
+    "head",
+    "lwrist",
+    "lhand",
+    "rwrist",
+    "rhand"
+] + DIGIT_JOINTS
+
+WALKING_SIMPLIFIED_JOINTS = [joint for joint in ALL_JOINTS if joint not in __non_walking_simplified_joints]
