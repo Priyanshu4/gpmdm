@@ -864,6 +864,30 @@ class GPDM(torch.nn.Module):
         diag_var_Y_pred = diag_var_Y_pred_common.unsqueeze(1) * y_log_lambdas.unsqueeze(0)
 
         return mean_Y_pred + torch.tensor(self.meanY, dtype = self.dtype, device = self.device), diag_var_Y_pred
+    
+        
+    def mean_pred_y(self, x):
+        """
+        Predict observation space mean of y_t given x_t
+
+        Parameters
+        ----------
+
+        x : tensor(dtype)
+            input latent state matrix 
+
+        Return
+        ------
+
+        mean_Y_pred : mean of Xout prediction
+        """     
+        Y_obs = self.get_Y()
+        Y_obs = torch.tensor(Y_obs, dtype = self.dtype, device = self.device)
+
+        Ky_star = self.get_y_kernel(self.X, x,False)
+
+        mean_Y_pred = torch.linalg.multi_dot([Y_obs.t(), self.Ky_inv,Ky_star]).t()
+        return mean_Y_pred + torch.tensor(self.meanY, dtype = self.dtype, device = self.device)
 
     def get_y_diag_kernel(self, X, flg_noise = False):
         """
@@ -922,6 +946,26 @@ class GPDM(torch.nn.Module):
         diag_var_Xout_pred = diag_var_Xout_pred_common.unsqueeze(1) * x_log_lambdas.unsqueeze(0)
 
         return mean_Xout_pred, diag_var_Xout_pred
+    
+    def mean_pred_x(self, x):
+        """
+        Predict latent space mean of x_t+1 given x_t
+
+        Parameters
+        ----------
+
+        x : tensor(dtype)
+            input latent state matrix 
+
+        Return
+        ------
+
+        mean_Xout_pred : mean of Xout prediction
+        """     
+        Xin, Xout, _ = self.get_Xin_Xout_matrices()
+        Kx_star = self.get_x_kernel(Xin, x,False)
+        mean_Xout_pred = torch.linalg.multi_dot([Xout.t(), self.Kx_inv, Kx_star]).t()
+        return mean_Xout_pred 
 
     def get_x_diag_kernel(self, X, flg_noise = False):
         """
