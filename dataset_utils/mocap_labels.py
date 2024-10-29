@@ -1,6 +1,8 @@
 from amc_parser.motion import MotionCapture
 from pathlib import Path
 
+MOCAP_PATH = Path(__file__).parent.parent / 'mocap'
+
 
 __walk_trials = {
     2: [1, 2],
@@ -23,11 +25,11 @@ def __get_path_amc(subject, trial):
     subject = str(subject).zfill(2)
     trial = str(trial).zfill(2)
 
-    return Path(__file__).parent / 'mocap' / 'subjects' / subject / f'{subject}_{trial}.amc'
+    return MOCAP_PATH / 'subjects' / subject / f'{subject}_{trial}.amc'
 
 def __get_path_asf(subject):
     subject = str(subject).zfill(2)
-    return Path(__file__).parent / 'mocap' / 'subjects' / subject / f'{subject}.asf'
+    return MOCAP_PATH / 'subjects' / subject / f'{subject}.asf'
 
 
 def __get_mocaps(trials: dict) -> list[MotionCapture]:
