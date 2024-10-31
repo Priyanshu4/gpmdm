@@ -287,9 +287,10 @@ class GPDM_UKF:
         """
         Compute the log likelihood of the most recent observation
         """
-        ll = -0.5 * (torch.log(torch.det(self.S)) + (self.residual).T @ torch.inverse(self.S) @ (self.residual))
+        d = self.residual.shape[0]
+        ll = -0.5 * (torch.logdet(self.S) + self.residual.T @ torch.linalg.solve(self.S, self.residual) + d * torch.log(torch.tensor(2 * torch.pi)))
         return ll.item()
-    
+
     @property
     def latent_dim(self):
         return self.gpdm.d
