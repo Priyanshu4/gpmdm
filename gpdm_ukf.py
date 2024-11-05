@@ -74,7 +74,7 @@ class GPDM_UKF:
         mean_Xout_pred = torch.linalg.multi_dot([Xout.t(), self.gpdm.Kx_inv, Kx_star]).t()
         return mean_Xout_pred 
 
-    def _cov_pred_x(self, x_star):
+    def _var_pred_x(self, x_star):
         """
         Get the covariance of the predicted latent space
 
@@ -128,7 +128,7 @@ class GPDM_UKF:
         mean_Y_pred = torch.linalg.multi_dot([Y_obs.t(), self.gpdm.Ky_inv, Ky_star]).t()
         return mean_Y_pred 
 
-    def _cov_pred_y(self, x_star):
+    def _var_pred_y(self, x_star):
         """
         Get the covariance of the predicted observation space
 
@@ -148,12 +148,6 @@ class GPDM_UKF:
 
         Y_obs = self.gpdm.get_Y()
         Y_obs = torch.tensor(Y_obs, dtype = self.gpdm.dtype, device = self.gpdm.device)
-
-        # TODO: check if this is correct
-        # Is it correct to use self.gpdm.X instead of self.gpdm.get_Xin_Xout_matrices()[0]?
-        # Ideally we should be able to use flg_noise = True, however:
-        # When flg_noise is True, Ky_star is a tensor of shape (n_train, n_train). This is wrong.
-        # When flg_noise is False, Ky_star is a tensor of shape (n_train, 1). This is as expected.
 
         Ky_star = self.gpdm.get_y_kernel(self.gpdm.X, x_star, False)
 
@@ -180,7 +174,7 @@ class GPDM_UKF:
             sigma_points.append(mu - self._gamma * sqrt_sigma[:, i])
         return torch.stack(sigma_points)
 
-    def update(self, z):
+    def _update(self, z):
         """ 
         Update the filter with the new observation z
 
@@ -207,7 +201,6 @@ class GPDM_UKF:
         To access the updated latent mean and covariance, use the properties mu and sigma.
         To access the likelihood of the observation, use the log_likelihood function.
         """
-
         # If z is a not a tensor, convert it to a tensor
         if not torch.is_tensor(z):
             z = torch.tensor(z, dtype=self.gpdm.dtype, device=self.gpdm.device)
@@ -229,9 +222,8 @@ class GPDM_UKF:
         # diag_embed converts it to a diagonal matrix of shape (d, d)
 
         # Step 4: Compute process noise using gp covariance
-        cov_x = self._cov_pred_x(mu_prev.unsqueeze(0))
-        # create a matrix with covs as diagonal
-        Q_k = torch.diag_embed(cov_x.squeeze(0))
+        diag_var_x = self._var_pred_x(mu_prev.unsqueeze(0))
+        Q_k = torch.diag_embed(diag_var_x.squeeze(0))
     
         # Step 5: Compute mean of the predicted state
         mu_pred = torch.sum(wm.view(-1, 1) * propagated_points, dim=0)
@@ -246,14 +238,9 @@ class GPDM_UKF:
         # Step 8: Propagate sigma points through the measurement model
         z_sigma_points = self._mean_pred_y(sigma_points_pred)
 
-        # TODO: check if step 9 is correct
-        # self._cov_pred_y(sigma_points_pred) returns a tensor of shape (n_train, D)
-        # we take the mean along n_train to get a tensor of shape (1, D)
-        # diag_embed converts it to a diagonal matrix of shape (D, D)
-
         # Step 9: Compute measurement noise R_k using GP's predicted covariance
-        cov_y = self._cov_pred_y(mu_pred.unsqueeze(0))
-        R_k = torch.diag_embed(cov_y.squeeze(0))
+        diag_var_y = self._var_pred_y(mu_pred.unsqueeze(0))
+        R_k = torch.diag_embed(diag_var_y.squeeze(0))
 
         # Step 10: Compute the predicted measurement mean
         z_pred = torch.sum(wm.view(-1, 1) * z_sigma_points, dim=0)
@@ -283,13 +270,34 @@ class GPDM_UKF:
         self._R_k = R_k
         self._S_k = S_k
 
+    def update(self, z):
+        """
+        Update the filter with the new observation z
+
+        Parameters:
+        - z (tensor): observation vector
+        """
+        with torch.no_grad():
+            self._update(z)
+
+    def _log_likelihood(self):
+        """
+        Compute the log likelihood of the most recent observation
+        """
+        mvn = torch.distributions.MultivariateNormal(self._z_pred, self._S_k)
+        return mvn.log_prob(self._z)
+    
     def log_likelihood(self):
         """
         Compute the log likelihood of the most recent observation
         """
-        d = self.residual.shape[0]
-        ll = -0.5 * (torch.logdet(self.S) + self.residual.T @ torch.linalg.solve(self.S, self.residual) + d * torch.log(torch.tensor(2 * torch.pi)))
-        return ll.item()
+        return self._log_likelihood().item()
+
+    def expected_information_gain(self):
+        """
+        Compute the expected information gain of the most recent observation
+        """
+        return self._log_likelihood() - 1/2 * torch.logdet(self.S)
 
     @property
     def latent_dim(self):
