@@ -44,11 +44,15 @@ class GPDM_UKF:
         """ 
         Reset the filter to the initial state 
         
-        The initial state is the mean of the latent space and with a very high covariance.
+        The initial state is the mean of latent space with high covariance.
         """
-        self._mu = self.gpdm.X.mean(axis=0).clone().detach()
-        self._sigma = torch.eye(self.latent_dim) * 1000
+        mean = self.gpdm.X.mean(axis=0).clone().detach()
+        centered_points = self.gpdm.X - mean
+        n = self.gpdm.X.shape[0]  # number of points
+        covariance = (centered_points.T @ centered_points) / (n - 1)
 
+        self._mu = mean
+        self._sigma = covariance * 2
         self._z = None
         self._z_pred = None
         self._Q_k = None
@@ -217,10 +221,6 @@ class GPDM_UKF:
         # Step 3: Propagate sigma points through GP dynamics model
         propagated_points = self._mean_pred_x(sigma_points)
 
-        # TODO: check if step 4 is correct
-        # self._cov_pred_x(sigma_points) returns a tensor of shape (1, d)
-        # diag_embed converts it to a diagonal matrix of shape (d, d)
-
         # Step 4: Compute process noise using gp covariance
         diag_var_x = self._var_pred_x(mu_prev.unsqueeze(0))
         Q_k = torch.diag_embed(diag_var_x.squeeze(0))
@@ -269,6 +269,7 @@ class GPDM_UKF:
         self._Q_k = Q_k
         self._R_k = R_k
         self._S_k = S_k
+        self._x_pred = mu_pred
 
     def update(self, z):
         """
