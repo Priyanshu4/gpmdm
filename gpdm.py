@@ -501,7 +501,6 @@ class GPDM(torch.nn.Module):
             torch.trace(torch.linalg.multi_dot([Kx_inv, Xout, W2, Xout.transpose(0,1)])) \
             - Xin.shape[0] * log_det_W
 
-
     def get_Xin_Xout_matrices(self, X = None, target = None, back_step = None):
         """
         Compute GP input and output matrices (Xin, Xout) for GP X
