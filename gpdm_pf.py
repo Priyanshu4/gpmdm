@@ -124,7 +124,8 @@ class GPDM_PF:
         log_weights = torch.log(self.weights)
         log_weighted_likelihoods = log_weights + self.log_likelihoods
         max_ll = torch.max(log_weighted_likelihoods)
-        return max_ll + torch.log(torch.sum(torch.exp(log_weighted_likelihoods - max_ll)))
+        log_likelihood = max_ll + torch.log(torch.sum(torch.exp(log_weighted_likelihoods - max_ll)))
+        return log_likelihood.item()
 
     def _mean_pred_x(self, x_star):
         """
