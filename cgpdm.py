@@ -322,8 +322,9 @@ class CGPDM(torch.nn.Module):
             class_data_points = sum([len(seq) for seq in class_seqs])
             
             # Fill the diagonal block for the current class
-            M[offset:offset + class_data_points, offset:offset + class_data_points] = torch.eye(class_data_points, dtype=self.dtype, device=self.device)
-            
+            block = torch.ones((class_data_points, class_data_points), dtype=self.dtype, device=self.device)
+            M[offset:offset + class_data_points, offset:offset + class_data_points] = block
+               
             # Update offset for the next block
             offset += class_data_points
 
@@ -358,7 +359,8 @@ class CGPDM(torch.nn.Module):
             
             if i == class_index:
                 # Fill the diagonal block for the specified class
-                M_c[offset:offset + class_data_points, offset:offset + class_data_points] = torch.eye(class_data_points, dtype=self.dtype, device=self.device)
+                block = torch.ones((class_data_points, class_data_points), dtype=self.dtype, device=self.device)
+                M_c[offset:offset + class_data_points, offset:offset + class_data_points] = block
                 break  # Stop after filling the relevant block
             
             # Update offset for the next block
