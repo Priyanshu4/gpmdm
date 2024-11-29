@@ -552,7 +552,7 @@ class CGPDM(torch.nn.Module):
         Y_W2_Y = torch.linalg.multi_dot([Y, W2, Y.transpose(0, 1)])
 
         return self.D / 2 * log_det_K_y + \
-            1 / 2 * torch.trace(torch.mm(Ky_inv, Y_W2_Y)) \
+            1 / 2 * torch.trace(torch.mm(Ky_inv, M*Y_W2_Y)) \
             - N * log_det_W
 
     def get_x_neg_log_likelihood(self, Xout, Xin, N):
