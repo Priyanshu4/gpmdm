@@ -15,9 +15,12 @@ from termcolor import colored, cprint
 from pathlib import Path
 
 
-class CGPDM(torch.nn.Module):
+class GPMDM(torch.nn.Module):
     """
-    Class Aware Gaussian Process Dynamical Model
+    Gaussian Process Multi-Dynamical Model (GPMDM) 
+
+    GPMDMs learn a latent space representation of the data 
+    and multiple dynamical models for each class. 
 
     Attributes
     ----------
@@ -164,7 +167,7 @@ class CGPDM(torch.nn.Module):
             device on which a tensors will be allocated
 
         """
-        super(CGPDM,self).__init__()
+        super(GPMDM,self).__init__()
 
         # torch parameters
         self.dtype = dtype

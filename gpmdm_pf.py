@@ -1,22 +1,22 @@
 import torch
 import numpy as np
-from cgpdm_dynamics import CGPDM
+from gpmdm import GPMDM
 
 _LOG_2PI = torch.log(torch.tensor(2 * 3.14159265358979323846))
 
-class CGPDM_PF:
+class GPMDM_PF:
     """
-    CGPDM Particle Filter
+    GPMDM Particle Filter
     """
 
-    def __init__(self, cgpdm: CGPDM, 
+    def __init__(self, gpmdm: GPMDM, 
                  num_particles: int = 100):
         """ Given a trained class aware GPDM model with different dynamics for each class, 
             this builds a model to compute likelihood of a sequence of observations
         """
 
-        self.cgpdm = cgpdm
-        self.cgpdm.set_evaluation_mode()
+        self.gpmdm = gpmdm
+        self.gpmdm.set_evaluation_mode()
 
         self.num_particles = num_particles
         self._init_particles()
@@ -29,19 +29,19 @@ class CGPDM_PF:
 
         # Particles is a list of particles for each class
         self.particles = []
-        particles_per_class = self.num_particles // self.cgpdm.n_classes
-        for i in range(self.cgpdm.n_classes):
+        particles_per_class = self.num_particles // self.gpmdm.n_classes
+        for i in range(self.gpmdm.n_classes):
             class_particles = self._sample_particles_from_training_data(particles_per_class, i)
             self.particles.append(class_particles)
             
-        self.log_likelihoods = torch.zeros(self.num_particles, dtype=self.cgpdm.dtype, device=self.cgpdm.device)
-        self.weights = torch.ones(self.num_particles, dtype=self.cgpdm.dtype, device=self.cgpdm.device) / self.num_particles
+        self.log_likelihoods = torch.zeros(self.num_particles, dtype=self.gpmdm.dtype, device=self.gpmdm.device)
+        self.weights = torch.ones(self.num_particles, dtype=self.gpmdm.dtype, device=self.gpmdm.device) / self.num_particles
 
     def _sample_particles_from_training_data(self, n_particles: int, class_index: int):
         """
         Sample n_particles from the training data of a given class
         """
-        class_data = self.cgpdm.get_X_for_class(class_index)
+        class_data = self.gpmdm.get_X_for_class(class_index)
         indices = torch.randperm(class_data.size(0))[:n_particles]
         return class_data[indices].detach().clone()
 
@@ -71,9 +71,9 @@ class CGPDM_PF:
         """ 
 
         # for each class, propogate particles through the dynamics model
-        for i in range(self.cgpdm.n_classes):
+        for i in range(self.gpmdm.n_classes):
             class_particles = self.particles[i]
-            mean_Xout_pred, diag_var_Xout_pred = self.cgpdm.map_x_dynamics_for_class(class_particles, class_index=i)
+            mean_Xout_pred, diag_var_Xout_pred = self.gpmdm.map_x_dynamics_for_class(class_particles, class_index=i)
             self.particles[i] = torch.normal(mean_Xout_pred, torch.sqrt(diag_var_Xout_pred))
             
     def _update_weights(self, z):
@@ -90,7 +90,7 @@ class CGPDM_PF:
         all_particles = torch.cat(self.particles)
         
         # propogate particles through measurement model
-        mean_Y_pred, diag_var_Y_pred = self.cgpdm.map_x_to_y(all_particles)
+        mean_Y_pred, diag_var_Y_pred = self.gpmdm.map_x_to_y(all_particles)
         
 
         # compute log likelihood of the observation for each particle
@@ -101,7 +101,7 @@ class CGPDM_PF:
 
             log_likelihood_mu_term = -0.5 * torch.sum((z - mean_Y_pred[i])**2 / diag_var_Y_pred[i] + torch.log(diag_var_Y_pred[i]))
             log_likelihood_sigma_term = torch.sum(-torch.log(torch.sqrt(diag_var_Y_pred[i])))
-            log_likelihood = log_likelihood_mu_term + log_likelihood_sigma_term - 0.5 * self.cgpdm.D * _LOG_2PI
+            log_likelihood = log_likelihood_mu_term + log_likelihood_sigma_term - 0.5 * self.gpmdm.D * _LOG_2PI
             self.log_likelihoods[i] = log_likelihood
             max_ll = torch.max(max_ll, log_likelihood)
 
@@ -186,20 +186,20 @@ class CGPDM_PF:
 
     @property
     def latent_dim(self):
-        return self.cgpdm.d
+        return self.gpmdm.d
 
     @property
     def observation_dim(self):
-        return self.cgpdm.D
+        return self.gpmdm.D
     
     @property
     def num_classes(self):
-        return self.cgpdm.n_classes
+        return self.gpmdm.n_classes
     
     @property
     def dtype(self):
-        return self.cgpdm.dtype
+        return self.gpmdm.dtype
     
     @property
     def device(self):
-        return self.cgpdm.device
+        return self.gpmdm.device
