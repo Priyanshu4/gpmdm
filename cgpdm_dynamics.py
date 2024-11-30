@@ -825,6 +825,19 @@ class CGPDM(torch.nn.Module):
         U_inv = torch.inverse(U)
         self.Kx_inv = torch.matmul(U_inv, U_inv.t())
 
+        self.M = M
+        self.M_class = []
+        self.X_class = []
+        self.Kx_inv_class = []
+        for i in range(self.n_classes):
+            self.M_class.append(self.get_M_for_class(i))
+            self.X_class.append(self.get_X_for_class(i))
+            Xin, Xout, _ = self.get_Xin_Xout_matrices(self.X_class[i])
+            Kx = self.get_x_kernel(Xin, Xin)
+            U, info = torch.linalg.cholesky_ex(Kx, upper=True)
+            U_inv = torch.inverse(U)
+            self.Kx_inv_class.append(torch.matmul(U_inv, U_inv.t()))
+
         return losses
 
     def get_latent_sequences(self):
@@ -952,6 +965,39 @@ class CGPDM(torch.nn.Module):
         mean_Xout_pred = torch.linalg.multi_dot([Xout.t(), self.Kx_inv, Kx_star]).t()
         diag_var_Xout_pred_common = self.get_x_diag_kernel(Xstar, flg_noise) - \
             torch.sum(torch.matmul(Kx_star.t(), self.Kx_inv) * Kx_star.t(), dim = 1)
+        x_log_lambdas = torch.exp(self.x_log_lambdas)**-2
+        diag_var_Xout_pred = diag_var_Xout_pred_common.unsqueeze(1) * x_log_lambdas.unsqueeze(0)
+
+        return mean_Xout_pred, diag_var_Xout_pred
+    
+    def map_x_dynamics_for_class(self, Xstar, class_index: int, flg_noise = False):
+        """
+        Map Xstar to GP dynamics output
+
+        Parameters
+        ----------
+
+        Xstar : tensor(dtype)
+            input latent state matrix 
+
+        flg_noise : boolean
+            add noise to kernel matrix
+
+        Return
+        ------
+
+        mean_Xout_pred : mean of Xout prediction
+
+        diag_var_Xout_pred : variance of Xout prediction
+
+        """
+        Xin, Xout, _ = self.get_Xin_Xout_matrices(self.X_class[class_index])
+        
+        Kx_star = self.get_x_kernel(Xin, Xstar,False)
+   
+        mean_Xout_pred = torch.linalg.multi_dot([Xout.t(), self.Kx_inv_class[class_index], Kx_star]).t()
+        diag_var_Xout_pred_common = self.get_x_diag_kernel(Xstar, flg_noise) - \
+            torch.sum(torch.matmul(Kx_star.t(), self.Kx_inv_class[class_index]) * Kx_star.t(), dim = 1)
         x_log_lambdas = torch.exp(self.x_log_lambdas)**-2
         diag_var_Xout_pred = diag_var_Xout_pred_common.unsqueeze(1) * x_log_lambdas.unsqueeze(0)
 
