@@ -1149,3 +1149,83 @@ class GPMDM(torch.nn.Module):
             print("Loaded params:")
             for param_tensor in self.state_dict():
                 print(param_tensor, "\t", self.state_dict()[param_tensor])
+
+    def get_dynamics_map_performance_for_class(self, class_index, flg_noise = False):
+        """
+        Measure accuracy in latent dynamics prediction
+
+        Parameters
+        ---------- 
+
+        flg_noise : boolean (optional)
+            add noise to prediction variance
+        
+        Return
+        ------
+
+        mean_Xout_pred : mean of Xout prediction
+
+        var_Xout_pred : variance of Xout prediction
+
+        Xout : Xout matrix
+
+        Xin : Xin matrix
+
+        NMSE : Normalized Mean Square Error
+
+        """
+
+        with torch.no_grad():
+            Xin, Xout, _ = self.get_Xin_Xout_matrices()
+            mean_Xout_pred, var_Xout_pred = self.map_x_dynamics_for_class(Xin, class_index,
+                                                        flg_noise = flg_noise)
+
+            mean_Xout_pred = mean_Xout_pred.clone().detach().cpu().numpy()
+            var_Xout_pred = var_Xout_pred.clone().detach().cpu().numpy()
+            Xout = Xout.clone().detach().cpu().numpy()
+            Xin = Xin.clone().detach().cpu().numpy()
+
+            z_squared = (Xout - mean_Xout_pred) ** 2 // var_Xout_pred
+            
+            NMSE = np.mean(z_squared)
+
+        return mean_Xout_pred, var_Xout_pred, Xout, Xin, NMSE
+
+
+    def get_latent_map_performance(self, flg_noise = False):
+        """
+        Measure accuracy of latent mapping
+
+        Parameters
+        ----------
+
+        flg_noise : boolean (optional)
+            add noise to prediction variance
+        
+        Return
+        ------
+
+        mean_Y_pred : mean of Y prediction
+
+        var_Y_pred : variance of Y prediction
+
+        Y : True observation matrix
+
+        NMSE : Normalized Mean Square Error
+        
+        """
+
+        with torch.no_grad():
+            mean_Y_pred, var_Y_pred = self.map_x_to_y(self.X,
+                                                      flg_noise = flg_noise)
+
+            mean_Y_pred = mean_Y_pred.clone().detach().cpu().numpy()
+            var_Y_pred = var_Y_pred.clone().detach().cpu().numpy()
+
+            Y = self.get_Y() + self.meanY
+
+            z_squared = (Y - mean_Y_pred) ** 2 // var_Y_pred
+
+            NMSE = np.mean(z_squared)
+
+            return mean_Y_pred, var_Y_pred, Y, NMSE
