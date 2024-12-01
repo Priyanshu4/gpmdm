@@ -46,8 +46,8 @@ class GPMDM_PF:
     def __init__(self, 
                  gpmdm: GPMDM, 
                  markov_switching_model: TensorType["C", "C", torch.float],
-                 num_particles: int = 100,
-                 n_fresh_particles_at_each_timestep: int = 10):
+                 num_particles: int,
+                 n_fresh_particles_at_each_timestep: int):
         """ 
         Initialize the particle filter
 
@@ -71,6 +71,12 @@ class GPMDM_PF:
         self._markov_switching_model = markov_switching_model.type(self.dtype)
         self._num_particles = num_particles
         self._n_fresh_particles_at_each_timestep = n_fresh_particles_at_each_timestep
+
+        if self._gpmdm.n_classes != self._markov_switching_model.size(0):
+            raise ValueError("Number of classes in the GPMDM model and the Markov model do not match")
+        
+        if self._num_particles <= self._n_fresh_particles_at_each_timestep:
+            raise ValueError("Number of particles should be greater than the number of fresh particles at each timestep")
 
         # Type annotations
         self._particle_states : TensorType["P", "L"] = ...       # latent states of the particles
