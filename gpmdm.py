@@ -1,8 +1,9 @@
-# Copyright 2022 by Fabio Amadio.
-# All rights reserved.
-# This file is part of the cgpdm_lib,
-# and is released under the "GNU General Public License".
-# Please see the LICENSE file included in the package.
+""" 
+Implementation of Gaussian Process Multi-Dynamics Model (GPMDM) in PyTorch
+
+Based on Fabio Amadio's implementation of a standard GPDM in cgpdm_lib.
+Modified to support multiple classes with different dynamics embedded in a shared latent space.
+""" 
 
 import torch
 import numpy as np
@@ -809,6 +810,8 @@ class GPMDM(torch.nn.Module):
 
             losses.append(loss.item())
 
+            self._precompute_kernel_inverse()
+
             if (num_print_steps != 0) and epoch % num_print_steps == 0:
                 print('\nGPDM Opt. EPOCH:', epoch)
                 print('Running loss:', "{:.4e}".format(loss.item()))
@@ -816,30 +819,6 @@ class GPMDM(torch.nn.Module):
                 print('Update time:',t_stop - t_start)
                 t_start = t_stop
 
-        # save inverse kernel matrices after training
-        Ky = self.get_y_kernel(self.X, self.X)
-        U, info = torch.linalg.cholesky_ex(Ky, upper=True)
-        U_inv = torch.inverse(U)
-        self.Ky_inv = torch.matmul(U_inv, U_inv.t())
-        
-        Xin, Xout, _ = self.get_Xin_Xout_matrices()
-        Kx = self.get_x_kernel(Xin, Xin)
-        U, info = torch.linalg.cholesky_ex(Kx, upper=True)
-        U_inv = torch.inverse(U)
-        self.Kx_inv = torch.matmul(U_inv, U_inv.t())
-
-        self.M = M
-        self.M_class = []
-        self.X_class = []
-        self.Kx_inv_class = []
-        for i in range(self.n_classes):
-            self.M_class.append(self.get_M_for_class(i))
-            self.X_class.append(self.get_X_for_class(i))
-            Xin, Xout, _ = self.get_Xin_Xout_matrices(self.X_class[i])
-            Kx = self.get_x_kernel(Xin, Xin)
-            U, info = torch.linalg.cholesky_ex(Kx, upper=True)
-            U_inv = torch.inverse(U)
-            self.Kx_inv_class.append(torch.matmul(U_inv, U_inv.t()))
 
         return losses
 
@@ -1131,17 +1110,7 @@ class GPMDM(torch.nn.Module):
         self.init_X()
         self.load_state_dict(state_dict)
 
-        # save inverse kernel matrices after training
-        Ky = self.get_y_kernel(self.X,self.X)
-        U, info = torch.linalg.cholesky_ex(Ky, upper=True)
-        U_inv = torch.inverse(U)
-        self.Ky_inv = torch.matmul(U_inv,U_inv.t())
-        
-        Xin, Xout, _ = self.get_Xin_Xout_matrices()
-        Kx = self.get_x_kernel(Xin,Xin)
-        U, info = torch.linalg.cholesky_ex(Kx, upper=True)
-        U_inv = torch.inverse(U)
-        self.Kx_inv = torch.matmul(U_inv,U_inv.t())
+        self._precompute_kernel_inverse()
 
         cprint("\nGPDM correctly loaded", "green")
 
@@ -1229,3 +1198,29 @@ class GPMDM(torch.nn.Module):
             NMSE = np.mean(z_squared)
 
             return mean_Y_pred, var_Y_pred, Y, NMSE
+        
+    def _precompute_kernel_inverse(self):
+            
+        Ky = self.get_y_kernel(self.X, self.X)
+        U, info = torch.linalg.cholesky_ex(Ky, upper=True)
+        U_inv = torch.inverse(U)
+        self.Ky_inv = torch.matmul(U_inv, U_inv.t())
+        
+        Xin, Xout, _ = self.get_Xin_Xout_matrices()
+        Kx = self.get_x_kernel(Xin, Xin)
+        U, info = torch.linalg.cholesky_ex(Kx, upper=True)
+        U_inv = torch.inverse(U)
+        self.Kx_inv = torch.matmul(U_inv, U_inv.t())
+
+        self.M = self.get_M()
+        self.M_class = []
+        self.X_class = []
+        self.Kx_inv_class = []
+        for i in range(self.n_classes):
+            self.M_class.append(self.get_M_for_class(i))
+            self.X_class.append(self.get_X_for_class(i))
+            Xin, Xout, _ = self.get_Xin_Xout_matrices(self.X_class[i])
+            Kx = self.get_x_kernel(Xin, Xin)
+            U, info = torch.linalg.cholesky_ex(Kx, upper=True)
+            U_inv = torch.inverse(U)
+            self.Kx_inv_class.append(torch.matmul(U_inv, U_inv.t()))
