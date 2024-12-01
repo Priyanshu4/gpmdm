@@ -417,9 +417,9 @@ class GPMDM(torch.nn.Module):
         K_x(X1,X2) 
 
         """
-        return self.get_rbf_kernel(X1, X2, self.x_log_lengthscales, self.x_log_sigma_n, self.sigma_n_num_X, flg_noise) + \
-               self.get_lin_kernel(X1, X2, self.x_log_lin_coeff)   
-
+        return  self.get_rbf_kernel(X1, X2, self.x_log_lengthscales, self.x_log_sigma_n, self.sigma_n_num_X, flg_noise) + \
+                self.get_lin_kernel(X1, X2, self.x_log_lin_coeff)  
+    
     def get_rbf_kernel(self, X1, X2, log_lengthscales_par, log_sigma_n_par,
                        sigma_n_num = 0, flg_noise = True):
         """
@@ -558,7 +558,7 @@ class GPMDM(torch.nn.Module):
             1 / 2 * torch.trace(torch.mm(Ky_inv, Y_W2_Y)) \
             - N * log_det_W
 
-    def get_x_neg_log_likelihood(self, Xout, Xin, N, M):
+    def get_x_neg_log_likelihood(self, Xout, Xin):
         """
         Compute dynamics map negative log-likelihood Lx
         
@@ -580,7 +580,7 @@ class GPMDM(torch.nn.Module):
 
         """
         
-        K_x = self.get_x_kernel(Xin, Xin)
+        K_x = self.get_x_kernel(Xin, Xin) * self.M
         U, info = torch.linalg.cholesky_ex(K_x, upper = True)
         U_inv = torch.inverse(U)
         Kx_inv = torch.matmul(U_inv, U_inv.t())
@@ -590,10 +590,8 @@ class GPMDM(torch.nn.Module):
         W2 = torch.diag(torch.exp(self.x_log_lambdas)**2)
         log_det_W = 2 * torch.sum(self.x_log_lambdas)
 
-        X_W2_X_T = torch.linalg.multi_dot([Xout, W2, Xout.transpose(0, 1)])
-
         return self.d / 2 * log_det_K_x + 1 / 2 * \
-            torch.trace(torch.mm(Kx_inv, M*X_W2_X_T)) \
+            torch.trace(torch.linalg.multi_dot([Kx_inv, Xout, W2, Xout.transpose(0, 1)])) \
             - Xin.shape[0] * log_det_W
 
     def get_Xin_Xout_matrices(self, X = None, target = None, back_step = None):
@@ -709,7 +707,7 @@ class GPMDM(torch.nn.Module):
         Xin, Xout, _ = self.get_Xin_Xout_matrices()
         
         lossY = self.get_y_neg_log_likelihood(Y, self.X, N)
-        lossX = self.get_x_neg_log_likelihood(Xout, Xin, N, M)
+        lossX = self.get_x_neg_log_likelihood(Xout, Xin)
 
         loss = lossY + balance*lossX
 
@@ -723,21 +721,14 @@ class GPMDM(torch.nn.Module):
         pca = PCA(n_components = self.d)
         X0 = pca.fit_transform(Y)
 
+        self._precompute_class_matrices()
+
         # set latent variables as parameters
         self.X = torch.nn.Parameter(torch.tensor(X0, dtype = self.dtype, 
                             device=  self.device), requires_grad=True)
 
         # init inverse kernel matrices
-        Ky = self.get_y_kernel(self.X, self.X)
-        U, info = torch.linalg.cholesky_ex(Ky, upper = True)
-        U_inv = torch.inverse(U)
-        self.Ky_inv = torch.matmul(U_inv, U_inv.t())
-        
-        Xin, Xout, _ = self.get_Xin_Xout_matrices()
-        Kx = self.get_x_kernel(Xin, Xin)
-        U, info = torch.linalg.cholesky_ex(Kx, upper = True)
-        U_inv = torch.inverse(U)
-        self.Kx_inv = torch.matmul(U_inv, U_inv.t())
+        self._precompute_kernel_inverses()
 
     def get_Y(self):
         """
@@ -788,7 +779,7 @@ class GPMDM(torch.nn.Module):
         Y = self.get_Y()
         N = Y.shape[0]
         Y = torch.tensor(Y, dtype = self.dtype, device = self.device)
-        M = self.get_M()
+       
 
         self.set_training_mode('all')
 
@@ -800,7 +791,7 @@ class GPMDM(torch.nn.Module):
         losses = []
         for epoch in range(num_opt_steps):
             optimizer.zero_grad()
-            loss = self.gpdm_loss(Y, N, M, balance)
+            loss = self.gpdm_loss(Y, N, balance)
             loss.backward()
             if torch.isnan(loss):
                 cprint('Loss is nan', 'red')
@@ -810,8 +801,6 @@ class GPMDM(torch.nn.Module):
 
             losses.append(loss.item())
 
-            self._precompute_kernel_inverse()
-
             if (num_print_steps != 0) and epoch % num_print_steps == 0:
                 print('\nGPDM Opt. EPOCH:', epoch)
                 print('Running loss:', "{:.4e}".format(loss.item()))
@@ -819,6 +808,7 @@ class GPMDM(torch.nn.Module):
                 print('Update time:',t_stop - t_start)
                 t_start = t_stop
 
+        self._precompute_kernel_inverses()
 
         return losses
 
@@ -973,21 +963,19 @@ class GPMDM(torch.nn.Module):
         diag_var_Xout_pred : variance of Xout prediction
 
         """
-        Xin, Xout, _ = self.get_Xin_Xout_matrices(self.X_class[class_index])
-        
-        Kx_star = self.get_x_kernel(Xin, Xstar,False)
+        Xin, Xout, _ = self.get_Xin_Xout_matrices()
+        Kx_star = self.get_x_kernel(Xin, Xstar, False) * torch.diagonal(self.M_class[class_index]).unsqueeze(1)
+        Kx_star_diag = self.get_x_diag_kernel(Xstar, flg_noise)
    
         mean_Xout_pred = torch.linalg.multi_dot([Xout.t(), self.Kx_inv_class[class_index], Kx_star]).t()
-        diag_var_Xout_pred_common = self.get_x_diag_kernel(Xstar, flg_noise) - \
-            torch.sum(torch.matmul(Kx_star.t(), self.Kx_inv_class[class_index]) * Kx_star.t(), dim = 1)
+        diag_var_Xout_pred_common = Kx_star_diag - torch.sum(torch.matmul(Kx_star.t(), self.Kx_inv_class[class_index]) * Kx_star.t(), dim = 1)
         x_log_lambdas = torch.exp(self.x_log_lambdas)**-2
         diag_var_Xout_pred = diag_var_Xout_pred_common.unsqueeze(1) * x_log_lambdas.unsqueeze(0)
-
         return mean_Xout_pred, diag_var_Xout_pred
 
     def get_x_diag_kernel(self, X, flg_noise = False):
         """
-        Compute only the diagonal of the dynamics mapping kernel GP Y
+        Compute only the diagonal of the dynamics mapping kernel GP X
 
         Parameters
         ----------
@@ -1109,8 +1097,7 @@ class GPMDM(torch.nn.Module):
         self.class_aware_observations_list = config_dict['class_aware_observations_list']
         self.init_X()
         self.load_state_dict(state_dict)
-
-        self._precompute_kernel_inverse()
+        self._precompute_kernel_inverses()
 
         cprint("\nGPDM correctly loaded", "green")
 
@@ -1146,6 +1133,7 @@ class GPMDM(torch.nn.Module):
 
         with torch.no_grad():
             Xin, Xout, _ = self.get_Xin_Xout_matrices()
+
             mean_Xout_pred, var_Xout_pred = self.map_x_dynamics_for_class(Xin, class_index,
                                                         flg_noise = flg_noise)
 
@@ -1199,28 +1187,36 @@ class GPMDM(torch.nn.Module):
 
             return mean_Y_pred, var_Y_pred, Y, NMSE
         
-    def _precompute_kernel_inverse(self):
-            
+    def _precompute_class_matrices(self):
+        """
+        Precompute M matrices for each class
+        """
+        self.M = self.get_M()
+        self.M_class = []
+        for i in range(self.n_classes):
+            self.M_class.append(self.get_M_for_class(i))
+        
+    def _precompute_kernel_inverses(self):
+
         Ky = self.get_y_kernel(self.X, self.X)
         U, info = torch.linalg.cholesky_ex(Ky, upper=True)
         U_inv = torch.inverse(U)
         self.Ky_inv = torch.matmul(U_inv, U_inv.t())
         
         Xin, Xout, _ = self.get_Xin_Xout_matrices()
-        Kx = self.get_x_kernel(Xin, Xin)
+        Kx = self.get_x_kernel(Xin, Xin) * self.M
         U, info = torch.linalg.cholesky_ex(Kx, upper=True)
         U_inv = torch.inverse(U)
         self.Kx_inv = torch.matmul(U_inv, U_inv.t())
 
-        self.M = self.get_M()
-        self.M_class = []
         self.X_class = []
         self.Kx_inv_class = []
         for i in range(self.n_classes):
-            self.M_class.append(self.get_M_for_class(i))
-            self.X_class.append(self.get_X_for_class(i))
-            Xin, Xout, _ = self.get_Xin_Xout_matrices(self.X_class[i])
-            Kx = self.get_x_kernel(Xin, Xin)
+            Xin, Xout, _ = self.get_Xin_Xout_matrices()
+            Kx = self.get_x_kernel(Xin, Xin) * self.M_class[i]
+            Kx = Kx + 1e-6 * torch.eye(Kx.shape[0], dtype=self.dtype, device=self.device)
             U, info = torch.linalg.cholesky_ex(Kx, upper=True)
             U_inv = torch.inverse(U)
             self.Kx_inv_class.append(torch.matmul(U_inv, U_inv.t()))
+
+    
