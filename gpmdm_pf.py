@@ -112,7 +112,10 @@ class GPMDM_PF:
         Sample n_particles from the training data of a given class
         """
         class_data = self._gpmdm.get_X_for_class(class_index)
-        indices = torch.randperm(class_data.size(0))[:n_particles]
+
+        # Sample indices with replacement
+        indices = torch.randint(0, class_data.size(0), (n_particles,), device=self.device)
+        
         return class_data[indices].detach().clone()
 
     def update(self, z: TensorType["D"]):
@@ -232,8 +235,7 @@ class GPMDM_PF:
         self._particle_states = torch.cat([resampled_states, torch.cat(fresh_particles)], dim=0)
         self._particle_classes = torch.cat([resampled_classes, 
                                            torch.tensor(fresh_classes, dtype=torch.int, device=self.device)], 
-                                           dim=0)
-   
+                                           dim=0)   
 
     def log_likelihood(self) -> float:
         """
