@@ -199,7 +199,9 @@ class GPMDM_PF:
         # for each particle
         # w_t = p(z_t | x_t, c_t) * w_{t-1}
         # log(w_t) = log(p(z_t | x_t, c_t)) + log(w_{t-1})
-        self._log_weights = self._log_likelihoods + self._log_weights
+        # self._log_weights = self._log_likelihoods + self._log_weights
+
+        self._log_weights = self._log_likelihoods
         self._log_weights = self._log_weights - torch.max(self._log_weights)
   
         self._weights = torch.exp(self._log_weights)
