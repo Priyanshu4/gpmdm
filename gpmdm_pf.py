@@ -105,7 +105,7 @@ class GPMDM_PF:
         self._particle_classes = torch.tensor(particle_classes, dtype=torch.int64, device=self.device)
         self._log_likelihoods = torch.zeros(self._num_particles, dtype=self.dtype, device=self.device)
         self._log_weights = torch.zeros(self._num_particles, dtype=self.dtype, device=self.device)
-        self._weights = torch.ones(self._num_particles, dtype=self.dtype, device=self.device)
+        self._weights = torch.ones(self._num_particles, dtype=self.dtype, device=self.device) / self._num_particles
     
     def _sample_particles_from_training_data(self, n_particles: int, class_index: int) -> TensorType["P", "L"]:
         """

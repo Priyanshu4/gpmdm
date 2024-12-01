@@ -745,6 +745,28 @@ class GPMDM(torch.nn.Module):
         self.meanY = 0
         Y = observation - self.meanY
         return Y
+    
+    def get_Y_for_class(self, class_index):
+        """
+        Create observation matrix Y from observations_list for a specific class
+
+        Parameters
+        ----------
+
+        class_index : int
+            Index of the class for which to create the observation matrix
+
+        Return
+        ------
+
+        Y : observation matrix
+        """
+        observation = np.concatenate(self.class_aware_observations_list[class_index], 0)
+
+        # self.meanY = np.mean(observation,0)
+        self.meanY = 0
+        Y = observation - self.meanY
+        return Y
 
     def train_adam(self, num_opt_steps, num_print_steps = 0,
                    lr = 0.01, balance = 1):
@@ -1171,15 +1193,38 @@ class GPMDM(torch.nn.Module):
         NMSE : Normalized Mean Square Error
         
         """
-
         with torch.no_grad():
-            mean_Y_pred, var_Y_pred = self.map_x_to_y(self.X,
-                                                      flg_noise = flg_noise)
-
+            mean_Y_pred, var_Y_pred = self.map_x_to_y(self.X, flg_noise = flg_noise)
             mean_Y_pred = mean_Y_pred.clone().detach().cpu().numpy()
             var_Y_pred = var_Y_pred.clone().detach().cpu().numpy()
 
             Y = self.get_Y() + self.meanY
+
+            z_squared = (Y - mean_Y_pred) ** 2 // var_Y_pred
+
+            NMSE = np.mean(z_squared)
+
+            return mean_Y_pred, var_Y_pred, Y, NMSE
+        
+    def get_latent_map_performance_for_class(self, class_index, flg_noise = False):
+        """
+        Measure accuracy of latent mapping for a specific class
+        
+        Parameters
+        ----------
+        
+        class_index : int
+            Index of the class for which to measure the latent mapping performance
+
+        flg_noise : boolean (optional)
+            add noise to prediction variance
+        """
+        with torch.no_grad():
+            mean_Y_pred, var_Y_pred = self.map_x_to_y(self.get_X_for_class(class_index), flg_noise = flg_noise)
+            mean_Y_pred = mean_Y_pred.clone().detach().cpu().numpy()
+            var_Y_pred = var_Y_pred.clone().detach().cpu().numpy()
+
+            Y = self.get_Y_for_class(class_index) + self.meanY
 
             z_squared = (Y - mean_Y_pred) ** 2 // var_Y_pred
 
