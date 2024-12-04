@@ -1,7 +1,6 @@
 import torch
 from torchtyping import TensorType
-import numpy as np
-from gpmdm.gpmdm import GPMDM
+from .gpmdm import GPMDM
 
 _LOG_2PI = torch.log(torch.tensor(2 * 3.14159265358979323846))
 

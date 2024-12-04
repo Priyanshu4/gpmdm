@@ -1,3 +1,4 @@
 mocap
 *.pyc
+__pycache__/
 models

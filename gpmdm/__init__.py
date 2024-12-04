@@ -1,2 +1,2 @@
-from gpmdm import GPMDM
-from gpmdm_pf import GPMDM_PF
+from .gpmdm import GPMDM
+from .gpmdm_pf import GPMDM_PF
