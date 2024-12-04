@@ -2,17 +2,17 @@
 Implementation of Gaussian Process Multi-Dynamics Model (GPMDM) in PyTorch
 
 Based on Fabio Amadio's implementation of a standard GPDM in cgpdm_lib.
-Modified to support multiple classes with different dynamics embedded in a shared latent space.
+Heavily modified, including to support multiple classes with different dynamics embedded in a shared latent space.
 """ 
 
 import torch
+from torchtyping import TensorType
 import numpy as np
 import time
-import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from torch.distributions.normal import Normal
 import pickle
-from termcolor import colored, cprint
+from termcolor import cprint
 from pathlib import Path
 
 
@@ -85,11 +85,24 @@ class GPMDM(torch.nn.Module):
     Ky_inv : torch.Tensor
         inverted latent map kernel matrix
 
+    
+    This class uses shape annotations to ensure that the tensors have the correct shapes.
+
+    Dimension Sizes:
+        D: observation space dimension
+        d: latent space dimension
+        Ny: total number of data points added (across all sequences)
+        Nx: total number of x_input to x_output pairs (across all sequences)
     """
     def __init__(self, D, d, n_classes, dyn_target, dyn_back_step,
-                 y_lambdas_init, y_lengthscales_init, y_sigma_n_init,
-                 x_lambdas_init, x_lengthscales_init, x_sigma_n_init,
-                 x_lin_coeff_init, flg_train_y_lambdas = True,
+                 y_lambdas_init: TensorType["D"], 
+                 y_lengthscales_init: TensorType["d"],
+                 y_sigma_n_init: float,
+                 x_lambdas_init: TensorType["d"],
+                 x_lengthscales_init: TensorType["d*dyn_back_step"], 
+                 x_sigma_n_init: float,
+                 x_lin_coeff_init: TensorType["d*dyn_back_step+1"],
+                 flg_train_y_lambdas = True,
                  flg_train_y_lengthscales = True, flg_train_y_sigma_n = True,
                  flg_train_x_lambdas = True, flg_train_x_lengthscales = True,
                  flg_train_x_sigma_n = True, flg_train_x_lin_coeff = True,
@@ -273,7 +286,7 @@ class GPMDM(torch.nn.Module):
         else:
             raise ValueError('model must be \'all\', \'latent\' or \'dynamics\'')      
 
-    def add_data(self, Y, class_index):
+    def add_data(self, Y: TensorType["sequence_length", "D"], class_index: int):
         """
         Add observation data to self.observations_list
 
@@ -293,7 +306,7 @@ class GPMDM(torch.nn.Module):
         self.class_aware_observations_list[class_index].append(Y)
 
     @property
-    def observations_list(self):
+    def observations_list(self) -> list[TensorType["sequence_length", "D"]]:
         """
         Return the list of all observations
 
@@ -303,7 +316,7 @@ class GPMDM(torch.nn.Module):
         """
         return [seq for class_seqs in self.class_aware_observations_list for seq in class_seqs]
 
-    def get_M(self):
+    def get_M(self) -> TensorType["Nx", "Nx"]:
         """
         Construct the class-specific block diagonal matrix M.
 
@@ -334,7 +347,7 @@ class GPMDM(torch.nn.Module):
 
         return M
 
-    def get_M_for_class(self, class_index):
+    def get_M_for_class(self, class_index: int) -> TensorType["Nx", "Nx"]:
         """
         Construct the block diagonal matrix M_c for a specific class.
 
@@ -373,7 +386,11 @@ class GPMDM(torch.nn.Module):
         return M_c
 
 
-    def get_y_kernel(self, X1, X2, flg_noise = True):
+    def get_y_kernel(self, 
+                    X1: TensorType["N1", "dimension"], 
+                    X2: TensorType["N2", "dimension"], 
+                    flg_noise: bool = True
+                    ) -> TensorType["N1", "N2"]:        
         """
         Compute the latent mapping kernel (GP Y)
         
@@ -396,7 +413,11 @@ class GPMDM(torch.nn.Module):
         """
         return self.get_rbf_kernel(X1, X2, self.y_log_lengthscales, self.y_log_sigma_n, self.sigma_n_num_Y, flg_noise)
 
-    def get_x_kernel(self, X1, X2, flg_noise = True):
+    def get_x_kernel(self, 
+                    X1: TensorType["N1", "dimension"], 
+                    X2: TensorType["N2", "dimension"], 
+                    flg_noise: bool = True
+                    ) -> TensorType["N1", "N2"]:
         """
         Compute the latent dynamic kernel (GP X)
 
@@ -420,8 +441,14 @@ class GPMDM(torch.nn.Module):
         return  self.get_rbf_kernel(X1, X2, self.x_log_lengthscales, self.x_log_sigma_n, self.sigma_n_num_X, flg_noise) + \
                 self.get_lin_kernel(X1, X2, self.x_log_lin_coeff)  
     
-    def get_rbf_kernel(self, X1, X2, log_lengthscales_par, log_sigma_n_par,
-                       sigma_n_num = 0, flg_noise = True):
+    def get_rbf_kernel(self, 
+                    X1: TensorType["N1", "dimension"], 
+                    X2: TensorType["N2", "dimension"], 
+                    log_lengthscales_par: TensorType["dimension"], 
+                    log_sigma_n_par: TensorType[1], 
+                    sigma_n_num: float = 0, 
+                    flg_noise: bool = True
+                    ) -> TensorType["N1", "N2"]:
         """
         Compute RBF kernel on X1, X2 points (without signal variance)
 
@@ -461,7 +488,11 @@ class GPMDM(torch.nn.Module):
         else:
             return torch.exp(-self.get_weighted_distances(X1, X2, log_lengthscales_par))
 
-    def get_weighted_distances(self, X1, X2, log_lengthscales_par):
+    def get_weighted_distances(self, 
+                            X1: TensorType["N1", "dimension"], 
+                            X2: TensorType["N2", "dimension"], 
+                            log_lengthscales_par: TensorType["dimension"]
+                            ) -> TensorType["N1", "N2"]:
         """
         Computes (X1-X2)^T*Sigma^-2*(X1-X2) where Sigma = diag(exp(log_lengthscales_par))
 
@@ -494,7 +525,11 @@ class GPMDM(torch.nn.Module):
         return dist
 
 
-    def get_lin_kernel(self, X1, X2, log_lin_coeff_par):
+    def get_lin_kernel(self, 
+                    X1: TensorType["N1", "dimension"], 
+                    X2: TensorType["N2", "dimension"], 
+                    log_lin_coeff_par: TensorType["dimension+1"]
+                    ) -> TensorType["N1", "N2"]:
         """
         Computes linear kernel on X1, X2 points: [X1,1]^T*Sigma*[X2,1] where Sigma=diag(exp(log_lin_coeff_par)) 
         
@@ -520,8 +555,11 @@ class GPMDM(torch.nn.Module):
         X2 = torch.cat([X2,torch.ones(X2.shape[0], 1, dtype = self.dtype, device = self.device)], 1)
         return torch.matmul(X1, torch.matmul(Sigma, X2.transpose(0,1)))
 
-
-    def get_y_neg_log_likelihood(self, Y, X, N):
+    def get_y_neg_log_likelihood(self, 
+                                Y: TensorType["N", "D"], 
+                                X: TensorType["N", "d"], 
+                                N: int
+                                ) -> float:
         """
         Compute latent negative log-likelihood Ly
         
@@ -558,7 +596,10 @@ class GPMDM(torch.nn.Module):
             1 / 2 * torch.trace(torch.mm(Ky_inv, Y_W2_Y)) \
             - N * log_det_W
 
-    def get_x_neg_log_likelihood(self, Xout, Xin):
+    def get_x_neg_log_likelihood(self, 
+                                Xout: TensorType["N", "d"], 
+                                Xin: TensorType["N", "d * dyn_back_step"]
+                                ) -> float:
         """
         Compute dynamics map negative log-likelihood Lx
         
@@ -594,7 +635,15 @@ class GPMDM(torch.nn.Module):
             torch.trace(torch.linalg.multi_dot([Kx_inv, Xout, W2, Xout.transpose(0, 1)])) \
             - Xin.shape[0] * log_det_W
 
-    def get_Xin_Xout_matrices(self, X = None, target = None, back_step = None):
+    def get_Xin_Xout_matrices(self, 
+                            X: TensorType["Ny", "d"] = None, 
+                            target: str = None, 
+                            back_step: int = None
+                            ) -> tuple[
+                                TensorType["Nx", "d * back_step"], 
+                                TensorType["Nx", "d"], 
+                                list[int]
+                            ]:        
         """
         Compute GP input and output matrices (Xin, Xout) for GP X
 
@@ -677,7 +726,12 @@ class GPMDM(torch.nn.Module):
         return Xin, Xout, start_indeces
 
 
-    def gpdm_loss(self, Y, N, M, balance=1):
+    def gpdm_loss(self, 
+                Y: TensorType["N", "D"], 
+                N: int, 
+                M: TensorType["Nx", "Nx"], 
+                balance: float = 1
+                ) -> float:        
         """
         Calculate GPDM loss function L = L_y + beta * L_x.
 
@@ -730,7 +784,7 @@ class GPMDM(torch.nn.Module):
         # init inverse kernel matrices
         self._precompute_kernel_inverses()
 
-    def get_Y(self):
+    def get_Y(self) -> np.ndarray:
         """
         Create observation matrix Y from observations_list
 
@@ -746,7 +800,7 @@ class GPMDM(torch.nn.Module):
         Y = observation - self.meanY
         return Y
     
-    def get_Y_for_class(self, class_index):
+    def get_Y_for_class(self, class_index: int) -> np.ndarray:
         """
         Create observation matrix Y from observations_list for a specific class
 
@@ -768,8 +822,12 @@ class GPMDM(torch.nn.Module):
         Y = observation - self.meanY
         return Y
 
-    def train_adam(self, num_opt_steps, num_print_steps = 0,
-                   lr = 0.01, balance = 1):
+    def train_adam(self, 
+                num_opt_steps: int, 
+                num_print_steps: int = 0, 
+                lr: float = 0.01, 
+                balance: float = 1
+                ) -> list[float]:
         """
         Optimize model with Adam
 
@@ -834,7 +892,7 @@ class GPMDM(torch.nn.Module):
 
         return losses
 
-    def get_latent_sequences(self):
+    def get_latent_sequences(self) -> list[np.ndarray]:
         """
         Return the latent trajectories associated to each observation sequence recorded
 
@@ -853,7 +911,7 @@ class GPMDM(torch.nn.Module):
 
         return X_list
     
-    def get_X_for_class(self, class_index):
+    def get_X_for_class(self, class_index: int) -> TensorType["N", "d"]:
         """
         Return the entire X matrix for a specific class
 
@@ -870,7 +928,13 @@ class GPMDM(torch.nn.Module):
 
         return self.X[start_index:end_index, :]
 
-    def map_x_to_y(self, Xstar, flg_noise = False):
+    def map_x_to_y(self, 
+                Xstar: TensorType["N*", "d"], 
+                flg_noise: bool = False
+                ) -> tuple[
+                    TensorType["N*", "D"], 
+                    TensorType["N*", "D"]
+                ]:
         """
         Map Xstar to observation space: return mean and variance
         
@@ -906,7 +970,10 @@ class GPMDM(torch.nn.Module):
 
         return mean_Y_pred + torch.tensor(self.meanY, dtype = self.dtype, device = self.device), diag_var_Y_pred
 
-    def get_y_diag_kernel(self, X, flg_noise = False):
+    def get_y_diag_kernel(self, 
+                        X: TensorType["N", "d"], 
+                        flg_noise: bool = False
+                        ) -> TensorType["N"]:        
         """
         Compute only the diagonal of the latent mapping kernel GP Y
 
@@ -931,7 +998,13 @@ class GPMDM(torch.nn.Module):
         else:
             return torch.ones(n, dtype = self.dtype, device = self.device)
 
-    def map_x_dynamics(self, Xstar, flg_noise = False):
+    def map_x_dynamics(self, 
+                    Xstar: TensorType["N*", "d * dyn_back_step"], 
+                    flg_noise: bool = False
+                    ) -> tuple[
+                        TensorType["N*", "d"], 
+                        TensorType["N*", "d"]
+                    ]:        
         """
         Map Xstar to GP dynamics output
 
@@ -964,7 +1037,14 @@ class GPMDM(torch.nn.Module):
 
         return mean_Xout_pred, diag_var_Xout_pred
     
-    def map_x_dynamics_for_class(self, Xstar, class_index: int, flg_noise = False):
+    def map_x_dynamics_for_class(self, 
+                                Xstar: TensorType["N*", "d * dyn_back_step"], 
+                                class_index: int, 
+                                flg_noise: bool = False
+                                ) -> tuple[
+                                    TensorType["N*", "d"], 
+                                    TensorType["N*", "d"]
+                                ]:        
         """
         Map Xstar to GP dynamics output
 
@@ -995,7 +1075,10 @@ class GPMDM(torch.nn.Module):
         diag_var_Xout_pred = diag_var_Xout_pred_common.unsqueeze(1) * x_log_lambdas.unsqueeze(0)
         return mean_Xout_pred, diag_var_Xout_pred
 
-    def get_x_diag_kernel(self, X, flg_noise = False):
+    def get_x_diag_kernel(self, 
+                        X: TensorType["N", "d * dyn_back_step"], 
+                        flg_noise: bool = False
+                        ) -> TensorType["N"]:        
         """
         Compute only the diagonal of the dynamics mapping kernel GP X
 
@@ -1025,7 +1108,12 @@ class GPMDM(torch.nn.Module):
             return torch.ones(n, dtype = self.dtype, device = self.device) + \
                    torch.sum(torch.matmul(X, Sigma)*(X), dim=1)
 
-    def get_next_x(self, gp_mean_out, gp_out_var, Xold, flg_sample = False):
+    def get_next_x(self, 
+                gp_mean_out: TensorType["1", "d"], 
+                gp_out_var: TensorType["1", "d"], 
+                Xold: TensorType["1", "d"], 
+                flg_sample: bool = False
+                ) -> TensorType["1", "d"]:        
         """
         Predict GP X dynamics output to next latent state
 
@@ -1064,7 +1152,10 @@ class GPMDM(torch.nn.Module):
             else:
                 return Xold + gp_mean_out
 
-    def save(self, config_dict_path, state_dict_path):
+    def save(self, 
+            config_dict_path: str, 
+            state_dict_path: str
+            ) -> None:        
         """
         Save model into two pickle objects
 
@@ -1093,7 +1184,11 @@ class GPMDM(torch.nn.Module):
         cprint("GPDM state dict saved in "+state_dict_path, "green")
 
 
-    def load(self, config_dict, state_dict, flg_print = False):
+    def load(self, 
+            config_dict: dict | str, 
+            state_dict: dict | str, 
+            flg_print: bool = False
+            ) -> None:
         """
         Load (previously initialized) model
 
@@ -1128,7 +1223,16 @@ class GPMDM(torch.nn.Module):
             for param_tensor in self.state_dict():
                 print(param_tensor, "\t", self.state_dict()[param_tensor])
 
-    def get_dynamics_map_performance_for_class(self, class_index, flg_noise = False):
+    def get_dynamics_map_performance_for_class(self, 
+                                            class_index: int, 
+                                            flg_noise: bool = False
+                                            ) -> tuple[
+                                                np.ndarray, 
+                                                np.ndarray, 
+                                                np.ndarray, 
+                                                np.ndarray, 
+                                                float
+                                            ]:        
         """
         Measure accuracy in latent dynamics prediction
 
@@ -1171,7 +1275,14 @@ class GPMDM(torch.nn.Module):
         return mean_Xout_pred, var_Xout_pred, Xout, Xin, NMSE
 
 
-    def get_latent_map_performance(self, flg_noise = False):
+    def get_latent_map_performance(self, 
+                                flg_noise: bool = False
+                                ) -> tuple[
+                                    np.ndarray, 
+                                    np.ndarray, 
+                                    np.ndarray, 
+                                    float
+                                ]:        
         """
         Measure accuracy of latent mapping
 
@@ -1206,7 +1317,15 @@ class GPMDM(torch.nn.Module):
 
             return mean_Y_pred, var_Y_pred, Y, NMSE
         
-    def get_latent_map_performance_for_class(self, class_index, flg_noise = False):
+    def get_latent_map_performance_for_class(self, 
+                                            class_index: int, 
+                                            flg_noise: bool = False
+                                            ) -> tuple[
+                                                np.ndarray, 
+                                                np.ndarray, 
+                                                np.ndarray, 
+                                                float
+                                            ]:
         """
         Measure accuracy of latent mapping for a specific class
         
