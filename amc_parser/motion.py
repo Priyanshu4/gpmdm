@@ -1,5 +1,4 @@
 from amc_parser import parse_asf, parse_amc
-from .viewer import Viewer
 import pandas as pd
 import numpy as np
 
@@ -78,10 +77,13 @@ class MotionCapture:
     @property
     def n_frames(self):
         return len(self._frames)
-
-
     
     def view(self):
+
+        # I put this here because the viewer imports pygame, triggering the pygame hello message
+        # I don't want to see this message or start pygame unless I'm actually viewing the motion
+        from .viewer import Viewer
+
         viewer = Viewer()
         viewer.set_joints(self.joints)
         viewer.set_motion(self.motions)

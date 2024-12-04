@@ -73,14 +73,16 @@ class Joint:
     for child in self.children:
       child.set_motion(motion)
 
-  def draw(self):
+  def draw(self, ax=None, show=True):
     if self.coordinate is None:
       raise ValueError('motion is not set')
 
     joints = self.to_dict()
-    fig = plt.figure()
-    ax = Axes3D(fig,auto_add_to_figure=False)
-    fig.add_axes(ax)
+
+    if ax is None:
+      fig = plt.figure()
+      ax = Axes3D(fig,auto_add_to_figure=False)
+      fig.add_axes(ax)
 
     ax.set_xlim3d(-50 * CMU_MOCAP_LENGTH_TO_METERS, 10 * CMU_MOCAP_LENGTH_TO_METERS)
     ax.set_ylim3d(-20 * CMU_MOCAP_LENGTH_TO_METERS, 40 * CMU_MOCAP_LENGTH_TO_METERS)
@@ -91,7 +93,7 @@ class Joint:
       xs.append(joint.coordinate[0, 0])
       ys.append(joint.coordinate[1, 0])
       zs.append(joint.coordinate[2, 0])
-    plt.plot(zs, xs, ys, 'b.')
+    ax.plot(zs, xs, ys, 'b.')
 
     for joint in joints.values():
       child = joint
@@ -100,8 +102,10 @@ class Joint:
         xs = [child.coordinate[0, 0], parent.coordinate[0, 0]]
         ys = [child.coordinate[1, 0], parent.coordinate[1, 0]]
         zs = [child.coordinate[2, 0], parent.coordinate[2, 0]]
-        plt.plot(zs, xs, ys, 'r')
-    plt.show()
+        ax.plot(zs, xs, ys, 'r')
+
+    if show:
+      plt.show()
 
   def to_dict(self):
     ret = {self.name: self}
