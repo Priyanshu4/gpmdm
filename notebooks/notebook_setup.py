@@ -6,7 +6,7 @@ This script is used to setup the imports for the notebooks.
 
 It should be imported at the beginning of the notebook as follows:
 
-import nb_setup
+import notebook_setup
 """
 
 if __name__ == '__main__':
@@ -17,4 +17,7 @@ if Path.cwd().name == 'notebooks':
     # to be able to import the modules
     project_root = Path.cwd().parent
     sys.path.append(str(project_root))
+else:
+    project_root = Path.cwd()
 
+MODELS_DIR = project_root / 'models'

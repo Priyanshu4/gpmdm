@@ -11,7 +11,6 @@ import numpy as np
 import time
 from sklearn.decomposition import PCA
 from torch.distributions.normal import Normal
-import pickle
 from termcolor import cprint
 from pathlib import Path
 
@@ -198,44 +197,37 @@ class GPMDM(torch.nn.Module):
         # dynamic model input
         self.dyn_back_step = dyn_back_step
 
-        # Set Y-kernel parameters
-        self.y_log_lengthscales = torch.nn.Parameter(torch.tensor(
-            np.log(np.abs(y_lengthscales_init)),
-            dtype = self.dtype,
-            device = self.device),
-            requires_grad = flg_train_y_lengthscales)
-        self.y_log_lambdas = torch.nn.Parameter(torch.tensor(
-            np.log(np.abs(y_lambdas_init)),
-            dtype = self.dtype,
-            device = self.device),
-            requires_grad = flg_train_y_lambdas)
-        self.y_log_sigma_n = torch.nn.Parameter(torch.tensor(
-            np.log(np.abs(y_sigma_n_init)),
-            dtype = self.dtype,
-            device = self.device),
-            requires_grad = flg_train_y_sigma_n)
+        # Set y kernel parameters
+        self.y_log_lengthscales = torch.nn.Parameter(
+            torch.log(to_tensor(y_lengthscales_init, dtype=self.dtype, device=self.device)),
+            requires_grad=flg_train_y_lengthscales,
+        )
+        self.y_log_lambdas = torch.nn.Parameter(
+            torch.log(to_tensor(y_lambdas_init, dtype=self.dtype, device=self.device)),
+            requires_grad=flg_train_y_lambdas,
+        )
+        self.y_log_sigma_n = torch.nn.Parameter(
+            torch.log(to_tensor(y_sigma_n_init, dtype=self.dtype, device=self.device)),
+            requires_grad=flg_train_y_sigma_n,
+        )
 
-        # Set X-kernel parameters
-        self.x_log_lengthscales = torch.nn.Parameter(torch.tensor(
-            np.log(np.abs(x_lengthscales_init)),
-            dtype = self.dtype,
-            device = self.device),
-            requires_grad = flg_train_x_lengthscales)
-        self.x_log_lambdas = torch.nn.Parameter(torch.tensor(
-            np.log(np.abs(x_lambdas_init)),
-            dtype = self.dtype,
-            device = self.device),
-            requires_grad = flg_train_x_lambdas)
-        self.x_log_sigma_n = torch.nn.Parameter(torch.tensor(
-            np.log(np.abs(x_sigma_n_init)),
-            dtype = self.dtype,
-            device = self.device),
-            requires_grad = flg_train_x_sigma_n)
-        self.x_log_lin_coeff = torch.nn.Parameter(torch.tensor(
-            np.log(np.abs(x_lin_coeff_init)),
-            dtype = self.dtype,
-            device = self.device),
-            requires_grad = flg_train_x_lin_coeff)
+        # Set x kernel parameters
+        self.x_log_lengthscales = torch.nn.Parameter(
+            torch.log(to_tensor(x_lengthscales_init, dtype=self.dtype, device=self.device)),
+            requires_grad=flg_train_x_lengthscales,
+        )
+        self.x_log_lambdas = torch.nn.Parameter(
+            torch.log(to_tensor(x_lambdas_init, dtype=self.dtype, device=self.device)),
+            requires_grad=flg_train_x_lambdas,
+        )
+        self.x_log_sigma_n = torch.nn.Parameter(
+            torch.log(to_tensor(x_sigma_n_init, dtype=self.dtype, device=self.device)),
+            requires_grad=flg_train_x_sigma_n,
+        )
+        self.x_log_lin_coeff = torch.nn.Parameter(
+            torch.log(to_tensor(x_lin_coeff_init, dtype=self.dtype, device=self.device)),
+            requires_grad=flg_train_x_lin_coeff,
+        )
 
         # additional noise variance for numerical issues
         self.sigma_n_num_Y = sigma_n_num_Y
@@ -1152,77 +1144,6 @@ class GPMDM(torch.nn.Module):
             else:
                 return Xold + gp_mean_out
 
-    def save(self, 
-            config_dict_path: str, 
-            state_dict_path: str
-            ) -> None:        
-        """
-        Save model into two pickle objects
-
-        Parameters
-        ----------
-
-        config_dict_path : string
-            save path for the config_dict
-
-        state_dict_path : string
-            save path for the state_dict
-
-        """
-
-        torch.save(self.state_dict(), state_dict_path)
-        config_dict={}
-        config_dict['class_aware_observations_list'] = self.class_aware_observations_list
-        config_dict['dyn_target'] = self.dyn_target
-        config_dict['dyn_back_step'] = self.dyn_back_step
-        config_dict['D'] = self.D
-        config_dict['d'] = self.d
-        config_dict['sigma_n_num_X'] = self.sigma_n_num_X
-        config_dict['sigma_n_num_Y'] = self.sigma_n_num_Y
-        pickle.dump(config_dict, open(config_dict_path, 'wb'))
-        cprint("\nGPDM config dict saved in "+config_dict_path, "green")
-        cprint("GPDM state dict saved in "+state_dict_path, "green")
-
-
-    def load(self, 
-            config_dict: dict | str, 
-            state_dict: dict | str, 
-            flg_print: bool = False
-            ) -> None:
-        """
-        Load (previously initialized) model
-
-        Parameters
-        ----------
-
-        config_dict : pathlike or dict
-            configuration dictionary
-
-        config_dict : pathlike or collections.OrderedDict
-            model state dictionary
-
-        flg_print : bool (optional)
-            flag to print loaded state_dict (default is False)
-        """
-
-        if isinstance(config_dict, (str, Path)):
-            config_dict = pickle.load(open(config_dict, 'rb'))
-
-        if isinstance(state_dict, (str, Path)):
-            state_dict = torch.load(state_dict)
-
-        self.class_aware_observations_list = config_dict['class_aware_observations_list']
-        self.init_X()
-        self.load_state_dict(state_dict)
-        self._precompute_kernel_inverses()
-
-        cprint("\nGPDM correctly loaded", "green")
-
-        if flg_print:
-            print("Loaded params:")
-            for param_tensor in self.state_dict():
-                print(param_tensor, "\t", self.state_dict()[param_tensor])
-
     def get_dynamics_map_performance_for_class(self, 
                                             class_index: int, 
                                             flg_noise: bool = False
@@ -1383,4 +1304,134 @@ class GPMDM(torch.nn.Module):
             U_inv = torch.inverse(U)
             self.Kx_inv_class.append(torch.matmul(U_inv, U_inv.t()))
 
+    def save(self, file_path: str) -> None:
+        """
+        Save the model into a single file, including all hyperparameters and trainable parameters.
+
+        Parameters
+        ----------
+        file_path : str
+            Path to the file where the model will be saved.
+        """
+        # Collect all hyperparameters and static attributes into a config dictionary
+        config_dict = {
+            'class_aware_observations_list': self.class_aware_observations_list,
+            'dyn_target': self.dyn_target,
+            'dyn_back_step': self.dyn_back_step,
+            'D': self.D,
+            'd': self.d,
+            'n_classes': self.n_classes,
+            'sigma_n_num_X': self.sigma_n_num_X,
+            'sigma_n_num_Y': self.sigma_n_num_Y,
+            'dtype': str(self.dtype),  # Save dtype as a string
+            'device': str(self.device),  # Save device as a string
+            # Add the initial kernel hyperparameters
+            'y_lengthscales_init': self.y_log_lengthscales.detach().exp().tolist(),
+            'y_lambdas_init': self.y_log_lambdas.detach().exp().tolist(),
+            'y_sigma_n_init': self.y_log_sigma_n.detach().exp().item(),
+            'x_lengthscales_init': self.x_log_lengthscales.detach().exp().tolist(),
+            'x_lambdas_init': self.x_log_lambdas.detach().exp().tolist(),
+            'x_sigma_n_init': self.x_log_sigma_n.detach().exp().item(),
+            'x_lin_coeff_init': self.x_log_lin_coeff.detach().exp().tolist(),
+        }
+
+        # Combine the state_dict (trainable parameters) and config_dict into a single dictionary
+        save_dict = {
+            'state_dict': self.state_dict(),
+            'config_dict': config_dict,
+        }
+
+        # Save the combined dictionary to a file
+        torch.save(save_dict, file_path)
+        cprint(f"Model and hyperparameters saved to {file_path}", "green")
+
+
+    @classmethod
+    def load(cls, file_path: str | Path, flg_print: bool = False) -> 'GPMDM':
+        """
+        Load the model from a single file, reconstructing all hyperparameters and trainable parameters.
+
+        Parameters
+        ----------
+        file_path : str
+            Path to the file where the model is saved.
+
+        flg_print : bool, optional
+            Flag to print loaded state_dict, default is False.
+
+        Returns
+        -------
+        GPMDM
+            The loaded and initialized GPMDM instance.
+        """
+        # Load the saved dictionary from the file
+        save_dict = torch.load(file_path)
+
+        # Extract the config dictionary and state dictionary
+        config_dict = save_dict['config_dict']
+        state_dict = save_dict['state_dict']
+
+        dtype = config_dict['dtype']
+        if dtype.startswith('torch.'):
+            dtype = dtype[6:]
+
+        # Reconstruct the model using the saved hyperparameters
+        model = cls(
+            D=config_dict['D'],
+            d=config_dict['d'],
+            n_classes=config_dict['n_classes'],
+            dyn_target=config_dict['dyn_target'],
+            dyn_back_step=config_dict['dyn_back_step'],
+            y_lambdas_init=torch.tensor(config_dict['y_lambdas_init']),
+            y_lengthscales_init=torch.tensor(config_dict['y_lengthscales_init']),
+            y_sigma_n_init=config_dict['y_sigma_n_init'],
+            x_lambdas_init=torch.tensor(config_dict['x_lambdas_init']),
+            x_lengthscales_init=torch.tensor(config_dict['x_lengthscales_init']),
+            x_sigma_n_init=config_dict['x_sigma_n_init'],
+            x_lin_coeff_init=torch.tensor(config_dict['x_lin_coeff_init']),
+            sigma_n_num_X=config_dict['sigma_n_num_X'],
+            sigma_n_num_Y=config_dict['sigma_n_num_Y'],
+            dtype=getattr(torch, dtype),                 # Convert dtype string back to torch.dtype 
+            device=torch.device(config_dict['device']),  # Convert device string back to torch.device
+        )
+
+        model.class_aware_observations_list = config_dict['class_aware_observations_list']
+        model.init_X()
+
+        # Restore the trainable parameters
+        model.load_state_dict(state_dict)
+
+        # Initialize latent variables and kernel inverses
+        model._precompute_kernel_inverses()
+
+        cprint("\nModel and hyperparameters correctly loaded", "green")
+
+        if flg_print:
+            print("Loaded params:")
+            for param_tensor in model.state_dict():
+                print(param_tensor, "\t", model.state_dict()[param_tensor])
+
+        return model
     
+def to_tensor(input_array, dtype, device):
+    """
+    Convert input to a PyTorch tensor, maintaining gradients for torch.nn.Parameter.
+    
+    Parameters
+    ----------
+    input_array : numpy.ndarray or torch.Tensor
+        Input array or tensor to convert.
+    dtype : torch.dtype
+        Desired PyTorch data type.
+    device : torch.device
+        Desired device (CPU/GPU) for the tensor.
+    
+    Returns
+    -------
+    torch.Tensor
+        Converted PyTorch tensor.
+    """
+    if isinstance(input_array, torch.Tensor):
+        return input_array.to(dtype=dtype, device=device)
+    else:
+        return torch.tensor(input_array, dtype=dtype, device=device).clone().detach()
