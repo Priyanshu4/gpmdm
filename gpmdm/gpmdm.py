@@ -84,7 +84,7 @@ class GPMDM(torch.nn.Module):
     Ky_inv : torch.Tensor
         inverted latent map kernel matrix
 
-    
+    Note that this class uses X and Y to denote the latent and observation spaces, respectively.
     This class uses shape annotations to ensure that the tensors have the correct shapes.
 
     Dimension Sizes:
