@@ -20,4 +20,5 @@ if Path.cwd().name == 'notebooks':
 else:
     project_root = Path.cwd()
 
-MODELS_DIR = project_root / 'models'
+PROJECT_ROOT_DIR = project_root
+MODELS_DIR = PROJECT_ROOT_DIR / 'models'
