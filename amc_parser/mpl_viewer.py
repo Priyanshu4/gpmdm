@@ -20,6 +20,7 @@ class MPLViewer:
         self.motions = motions
         self.frame = 0  # current frame of the motion sequence
         self.fps = 120  # frame rate
+        self._downsample = 1
         self.fig, self.ax = plt.subplots(subplot_kw={'projection': '3d'})  # 3D plot
 
     def set_joints(self, joints):
@@ -54,26 +55,27 @@ class MPLViewer:
         self.ax.clear()  # Clear the previous frame
         self.joints["root"].draw(ax=self.ax, show=False)  # Pass the axis to the draw method
 
-    def update_frame(self, frame):
+    def update_frame(self, index):
         """
         Update function for the animation.
 
         Parameter
         ---------
-        frame: Current frame number.
+        index: Current frame index. Multiply by downsample to get the actual frame.
 
         """
-        self.frame = frame
-        self.joints["root"].set_motion(self.motions[frame])  # Update joint positions
+        self.frame = index * self._downsample                 # Update the current frame
+        self.joints["root"].set_motion(self.motions[self.frame])  # Update joint positions
         self.draw()  # Redraw the skeleton
 
-    def animate(self):
+    def animate(self, downsample=1):
         """
         Create an animation for the motion sequence.
 
         """
-        num_frames = len(self.motions)
-        interval = 1000 / self.fps  # Interval in milliseconds
+        self._downsample = downsample
+        num_frames = len(self.motions) // downsample    # Number of frames
+        interval = 1000 / (self.fps / downsample)      # Interval in milliseconds
 
         # Create the animation
         self.anim = FuncAnimation(

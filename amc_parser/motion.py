@@ -84,8 +84,6 @@ class MotionCapture:
         # I don't want to see this message or start pygame unless I'm actually viewing the motion
         from .viewer import Viewer
 
-        viewer = Viewer()
-        viewer.set_joints(self.joints)
-        viewer.set_motion(self.motions)
+        viewer = Viewer(self.joints, self._frames)
         viewer.run()
 
