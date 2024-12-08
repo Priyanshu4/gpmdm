@@ -19,6 +19,11 @@ class GPMDM_PF:
         w_t: weight of the particle
 
     At each time step, the particle filter is updated with a new observation z_t.
+
+    Note that this is different from notation used in the GPMDM class. 
+    GPMDM class uses x_t to represent the latent state of the system and y_t to represent the observation.
+    In standard particle filter notation, x_t represents the state of the particle and z_t represents the observation.    
+
     Particles are propogated by sampling from the predicted distribution of the next state.
     Update Steps:
     1. Particles are propogated through the Markov transition matrix to update the class of each particle.
@@ -27,11 +32,8 @@ class GPMDM_PF:
         a) Particles are propogated through the measurement model.
         b) For each particle, compute the log likelihood of the observation given the particle.
         c) For each class, the likelihood is the weighted sum of the likelihoods of the particles in that class.
-        d) Weights are updated according to w_k = p(z | x_k, c_k) * w_{k-1}
-    4. Particles are resampled.
-        a) Particles are resampled with replacement based on their weights.
-        b) A user-defined number of fresh particles are sampled from the training data of each class.
-        c) In total, the number of particles remains constant.
+        d) Weights are updated according to w_k = p(z | x_k, c_k)
+    4. Particles are resampled with replacement based on their weights.
 
     This class uses shape annotations to ensure that the tensors have the correct shapes.
 
@@ -45,8 +47,7 @@ class GPMDM_PF:
     def __init__(self, 
                  gpmdm: GPMDM, 
                  markov_switching_model: TensorType["C", "C", torch.float],
-                 num_particles: int,
-                 n_fresh_particles_at_each_timestep: int):
+                 num_particles: int):
         """ 
         Initialize the particle filter
 
@@ -69,13 +70,9 @@ class GPMDM_PF:
         # Set member variables
         self._markov_switching_model = markov_switching_model.type(self.dtype)
         self._num_particles = num_particles
-        self._n_fresh_particles_at_each_timestep = n_fresh_particles_at_each_timestep
 
         if self._gpmdm.n_classes != self._markov_switching_model.size(0):
             raise ValueError("Number of classes in the GPMDM model and the Markov model do not match")
-        
-        if self._num_particles <= self._n_fresh_particles_at_each_timestep:
-            raise ValueError("Number of particles should be greater than the number of fresh particles at each timestep")
 
         # Type annotations
         self._particle_states : TensorType["P", "L"] = ...       # latent states of the particles
@@ -209,34 +206,11 @@ class GPMDM_PF:
     def _resample(self):
         """ 
         Resample particles with replacement based on the weights. 
-        Also sample fresh particles from the training data of each class.
         """
-        
-        # Compute the number of fresh particles to sample from each class
-        n_fresh = self._n_fresh_particles_at_each_timestep
-        n_fresh_per_class = self._divide_into_n_parts(n_fresh, self.num_classes)
-
-        # Compute the number of particles to resample
-        n_resample = self._num_particles - n_fresh 
-
         # Sample with replacement from the multinomial distribution according to the weights
-        resampled_indices = torch.multinomial(self._weights, n_resample, replacement=True)
-        resampled_states = self._particle_states[resampled_indices]
-        resampled_classes = self._particle_classes[resampled_indices]
-
-        # For each class, sample some fresh particles
-        fresh_particles = []
-        fresh_classes = []
-        for i in range(self.num_classes):
-            class_particles = self._sample_particles_from_training_data(n_fresh_per_class[i], i)
-            fresh_particles.append(class_particles)
-            fresh_classes += [i] * n_fresh_per_class[i]
-
-        # Concatenate the resampled and fresh particles
-        self._particle_states = torch.cat([resampled_states, torch.cat(fresh_particles)], dim=0)
-        self._particle_classes = torch.cat([resampled_classes, 
-                                           torch.tensor(fresh_classes, dtype=torch.int, device=self.device)], 
-                                           dim=0)   
+        resampled_indices = torch.multinomial(self._weights, self._num_particles, replacement=True)
+        self._particle_states = self._particle_states[resampled_indices]
+        self._particle_classes = self._particle_classes[resampled_indices]
 
     def log_likelihood(self) -> float:
         """
