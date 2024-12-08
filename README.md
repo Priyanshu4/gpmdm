@@ -22,6 +22,9 @@ This repository implements a variant of Gaussian Process Dynamical Models (GPDMs
     - `train_gpmdm.ipynb`: Train the model.
     - `test_gpmdm_pf.ipynb`: Recreate my results.
     - `view_gpmdm_pf.ipynb`: Recreate the animation showed in the demo.
+ 
+#### Dependencies
+torch, torchtyping, pandas, numpy, sklearn, matplotlib, plotly 
 
 ## Brief Technical Overview
 
