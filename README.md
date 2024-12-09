@@ -1,6 +1,6 @@
 ﻿# Gaussian Process Multi-Dynamical Models for Human Activity Recognition
 
-This repository implements a variant of Gaussian Process Dynamical Models (GPDMs) that learns multiple dynamics functions in a shared latent space. We apply this model to the task of human activity recognition from human skeletal joint data. To test the model, I apply it to classification of walking and running from the CMU Motion Capture Database. In future work, this model could be applied to more complex datasets. 
+This repository implements a variant of Gaussian Process Dynamical Models (GPDMs) that learns multiple dynamics functions in a shared latent space. We combine this model with a particle filter to perform human activity recognition from human skeletal joint data. To test the model, I apply it to walking and running data from the CMU Motion Capture Database. In future work, this approach could be applied to more complex datasets, including datasets which include switching between actions.
 
 ## Table of Contents
 - [Demo](#demo)
