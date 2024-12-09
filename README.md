@@ -10,6 +10,12 @@ This repository implements a variant of Gaussian Process Dynamical Models (GPDMs
   - [Particle Filtering for Real-Time Classification]($particle-filtering-for-real-time-classification)
 
 ## Demo
+![Demo of my model for a running trial](https://private-user-images.githubusercontent.com/35632577/393655859-ece48d68-22ee-485d-8f98-1f53b1da7847.gif?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MzM3MDM2NjMsIm5iZiI6MTczMzcwMzM2MywicGF0aCI6Ii8zNTYzMjU3Ny8zOTM2NTU4NTktZWNlNDhkNjgtMjJlZS00ODVkLThmOTgtMWY1M2IxZGE3ODQ3LmdpZj9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNDEyMDklMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjQxMjA5VDAwMTYwM1omWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTgxYWZhMjFiZThkYjllMWYyMjdhZDMxZTg0YTBkZDcyNjI5NDJjNTAwZGY5NjRkN2UyZjgyZmE1NjE3MDM5MWYmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.PRfnxB0nt3h5wo_HrTWMKj-iRtogb6KvwJjVwMp4y58)
+
+The GIF above shows a demonstration of my model for a test trial corresponding to running. On the left, we see the motion capture data from the running person. 
+On the right, we see the latent space. The blue points are the training data points for walking. The red points are the training data points for running. 
+Each point in the latent space corresponds to a set of joint angles for the human skeleton. The green trajectory shows the mean of the particle filter's estimate of the latent state for the person on the left.
+As we can see, the particle filter's estimate closely follows the training data for running. 
 
 ## Repository Structure
 - `amc_parser`: Utilities to parse and view .amc files from the CMU Mocap Database. Adapted from https://github.com/CalciferZh/AMCParser with significant additions.
